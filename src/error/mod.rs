@@ -8,11 +8,15 @@ use axum::{
 };
 use serde_json::json;
 
+const MSG_INVALID_CREDENTIALS: &str = "Invalid email or password";
+const MSG_USER_ALREADY_EXISTS: &str = "User already exists";
+const MSG_AUTH_REQUIRED: &str = "Authentication required";
+const MSG_INSUFFICIENT_PERMISSIONS: &str = "Insufficient permissions";
+const MSG_NOT_FOUND: &str = "Resource not found";
+const MSG_INTERNAL_ERROR: &str = "Internal server error";
+
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {
-    // SECURITY: Both "user not found" and "wrong password" map to the same
-    // client-facing message. An attacker cannot distinguish between them,
-    // blocking user-enumeration attacks (OWASP A07:2021).
     #[error("Invalid credentials")]
     InvalidCredentials,
 
@@ -40,34 +44,26 @@ pub enum AppError {
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
-        // SECURITY: Log the real error server-side for debugging,
-        // but return a generic message to the client.
         let (status, message) = match &self {
-            AppError::InvalidCredentials => {
-                // Same message for wrong user AND wrong password.
-                (StatusCode::UNAUTHORIZED, "Invalid email or password")
-            }
-            AppError::UserAlreadyExists => (StatusCode::CONFLICT, "User already exists"),
+            AppError::InvalidCredentials => (StatusCode::UNAUTHORIZED, MSG_INVALID_CREDENTIALS),
+            AppError::UserAlreadyExists => (StatusCode::CONFLICT, MSG_USER_ALREADY_EXISTS),
             AppError::Validation(msg) => {
-                // Validation errors are safe to return — they describe
-                // input format issues, not internal state.
                 return (
                     StatusCode::UNPROCESSABLE_ENTITY,
                     Json(json!({ "error": msg })),
                 )
                     .into_response();
             }
-            AppError::Unauthorized => (StatusCode::UNAUTHORIZED, "Authentication required"),
-            AppError::Forbidden => (StatusCode::FORBIDDEN, "Insufficient permissions"),
-            AppError::NotFound => (StatusCode::NOT_FOUND, "Resource not found"),
+            AppError::Unauthorized => (StatusCode::UNAUTHORIZED, MSG_AUTH_REQUIRED),
+            AppError::Forbidden => (StatusCode::FORBIDDEN, MSG_INSUFFICIENT_PERMISSIONS),
+            AppError::NotFound => (StatusCode::NOT_FOUND, MSG_NOT_FOUND),
             AppError::Internal(detail) => {
-                // SECURITY: Log the real error but never send it to the client.
-                tracing::error!(error = %detail, "Internal server error");
-                (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error")
+                tracing::error!(error = %detail, MSG_INTERNAL_ERROR);
+                (StatusCode::INTERNAL_SERVER_ERROR, MSG_INTERNAL_ERROR)
             }
             AppError::Database(e) => {
                 tracing::error!(error = %e, "Database error");
-                (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error")
+                (StatusCode::INTERNAL_SERVER_ERROR, MSG_INTERNAL_ERROR)
             }
         };
 
