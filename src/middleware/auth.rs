@@ -13,6 +13,9 @@ use crate::error::AppError;
 use crate::models::Claims;
 use crate::AppState;
 
+const HEADER_AUTHORIZATION: &str = "Authorization";
+const BEARER_PREFIX: &str = "Bearer ";
+
 /// Extractor that validates the JWT and provides the authenticated user's claims.
 #[derive(Debug, Clone)]
 pub struct AuthUser(pub Claims);
@@ -25,19 +28,16 @@ impl FromRequestParts<AppState> for AuthUser {
         parts: &mut Parts,
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
-        // Extract the Authorization header
         let auth_header = parts
             .headers
-            .get("Authorization")
+            .get(HEADER_AUTHORIZATION)
             .and_then(|v| v.to_str().ok())
             .ok_or(AppError::Unauthorized)?;
 
-        // SECURITY: Only accept "Bearer <token>" format
         let token = auth_header
-            .strip_prefix("Bearer ")
+            .strip_prefix(BEARER_PREFIX)
             .ok_or(AppError::Unauthorized)?;
 
-        // Validate token signature and expiry
         let claims = crate::auth::decode_token(token, &state.jwt_secret)
             .map_err(|_| AppError::Unauthorized)?;
 
@@ -45,10 +45,7 @@ impl FromRequestParts<AppState> for AuthUser {
     }
 }
 
-/// Middleware that requires a specific role.
-/// SECURITY: Role is resolved from the JWT claims (server-side),
-/// never from request body/headers. An operator token cannot access
-/// admin-only endpoints even if the request claims to be admin.
+/// Middleware that requires admin role.
 pub async fn require_admin(
     AuthUser(claims): AuthUser,
     request: Request,
