@@ -20,6 +20,15 @@ use tower_governor::GovernorLayer;
 use tower_http::trace::TraceLayer;
 use user::DynUserService;
 
+// ── Route path constants ─────────────────────────────────────────
+
+pub const PATH_AUTH: &str = "/auth";
+pub const PATH_REGISTER: &str = "/register";
+pub const PATH_LOGIN: &str = "/login";
+pub const PATH_SENSORS: &str = "/sensors";
+pub const PATH_SENSOR_BY_ID: &str = "/:id";
+pub const PATH_ROOT: &str = "/";
+
 /// Shared application state.
 #[derive(Clone)]
 pub struct AppState {
@@ -36,8 +45,8 @@ pub fn build_router(state: AppState) -> Router {
     };
 
     let auth_routes = Router::new()
-        .route("/register", post(user::register_user))
-        .route("/login", post(user::login_user))
+        .route(PATH_REGISTER, post(user::register_user))
+        .route(PATH_LOGIN, post(user::login_user))
         .layer(rate_limit_layer);
 
     build_app(state, auth_routes)
@@ -46,28 +55,28 @@ pub fn build_router(state: AppState) -> Router {
 /// Build the router without rate limiting (for integration tests).
 pub fn build_router_without_rate_limit(state: AppState) -> Router {
     let auth_routes = Router::new()
-        .route("/register", post(user::register_user))
-        .route("/login", post(user::login_user));
+        .route(PATH_REGISTER, post(user::register_user))
+        .route(PATH_LOGIN, post(user::login_user));
 
     build_app(state, auth_routes)
 }
 
 fn build_app(state: AppState, auth_routes: Router<AppState>) -> Router {
     let sensor_write_routes = Router::new()
-        .route("/", post(reading::create_reading))
+        .route(PATH_ROOT, post(reading::create_reading))
         .route_layer(axum_mw::from_fn_with_state(
             state.clone(),
             middleware::auth::require_admin,
         ));
 
     let sensor_routes = Router::new()
-        .route("/", get(reading::list_readings))
-        .route("/:id", get(reading::get_reading))
+        .route(PATH_ROOT, get(reading::list_readings))
+        .route(PATH_SENSOR_BY_ID, get(reading::get_reading))
         .merge(sensor_write_routes);
 
     Router::new()
-        .nest("/auth", auth_routes)
-        .nest("/sensors", sensor_routes)
+        .nest(PATH_AUTH, auth_routes)
+        .nest(PATH_SENSORS, sensor_routes)
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }

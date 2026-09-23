@@ -14,6 +14,8 @@ use crate::models::{AuthResponse, LoginRequest, RegisterRequest, UserInfo};
 
 use super::DynUserRepo;
 
+const TOKEN_TYPE_BEARER: &str = "Bearer";
+
 #[cfg_attr(test, automock)]
 #[async_trait::async_trait]
 pub trait UserService: Send + Sync {
@@ -110,7 +112,7 @@ impl UserService for UserServiceImpl {
 
         Ok(AuthResponse {
             token,
-            token_type: "Bearer".to_string(),
+            token_type: TOKEN_TYPE_BEARER.to_string(),
         })
     }
 }
